@@ -10,7 +10,8 @@ export default defineSchema({
       v.literal("yatra-ai-next"),
       v.literal("digital-twin"),
       v.literal("skybot"),
-      v.literal("dalal-street-ai")
+      v.literal("dalal-street-ai"),
+      v.literal("yatra-ai")
     ),
     // Optional free-text label for what the call was for within that app
     // (e.g. "generateItinerary", "chat", "flightFareRules") — not a strict

@@ -1,16 +1,14 @@
 import { internalMutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-// Records a single LLM call. Marked internal since the only caller is our
-// own http.ts action (which does the actual authentication before
-// forwarding here) — apps never call this directly.
 export const logUsage = internalMutation({
   args: {
     appName: v.union(
       v.literal("yatra-ai-next"),
       v.literal("digital-twin"),
       v.literal("skybot"),
-      v.literal("dalal-street-ai")
+      v.literal("dalal-street-ai"),
+      v.literal("yatra-ai")
     ),
     feature: v.optional(v.string()),
     model: v.string(),
@@ -26,9 +24,6 @@ export const logUsage = internalMutation({
   },
 });
 
-// Returns recent usage records for the dashboard. Gated by a simple shared
-// password (checked against a Convex env var) rather than a full user/session
-// system, since this is a single-user internal tool, not a multi-tenant app.
 export const getUsageRecords = query({
   args: {
     dashboardPassword: v.string(),
@@ -37,7 +32,8 @@ export const getUsageRecords = query({
         v.literal("yatra-ai-next"),
         v.literal("digital-twin"),
         v.literal("skybot"),
-        v.literal("dalal-street-ai")
+        v.literal("dalal-street-ai"),
+        v.literal("yatra-ai")
       )
     ),
     limit: v.optional(v.number()),
