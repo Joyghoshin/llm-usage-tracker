@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 
-const APPS = ["yatra-ai-next", "dalal-street-ai"] as const;
+const APPS = ["yatra-ai-next", "dalal-street-ai", "rootcause-ai"] as const;
 
 export default function App() {
   const [password, setPassword] = useState("");

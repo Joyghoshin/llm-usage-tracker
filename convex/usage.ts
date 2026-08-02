@@ -1,6 +1,9 @@
-import { internalMutation, query } from "./_generated/server";
+﻿import { internalMutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+// Records a single LLM call. Marked internal since the only caller is our
+// own http.ts action (which does the actual authentication before
+// forwarding here) - apps never call this directly.
 export const logUsage = internalMutation({
   args: {
     appName: v.union(
@@ -8,7 +11,8 @@ export const logUsage = internalMutation({
       v.literal("digital-twin"),
       v.literal("skybot"),
       v.literal("dalal-street-ai"),
-      v.literal("yatra-ai")
+      v.literal("yatra-ai"),
+      v.literal("rootcause-ai")
     ),
     feature: v.optional(v.string()),
     model: v.string(),
@@ -24,6 +28,9 @@ export const logUsage = internalMutation({
   },
 });
 
+// Returns recent usage records for the dashboard. Gated by a simple shared
+// password (checked against a Convex env var) rather than a full user/session
+// system, since this is a single-user internal tool, not a multi-tenant app.
 export const getUsageRecords = query({
   args: {
     dashboardPassword: v.string(),
@@ -33,7 +40,8 @@ export const getUsageRecords = query({
         v.literal("digital-twin"),
         v.literal("skybot"),
         v.literal("dalal-street-ai"),
-        v.literal("yatra-ai")
+        v.literal("yatra-ai"),
+        v.literal("rootcause-ai")
       )
     ),
     limit: v.optional(v.number()),
@@ -41,7 +49,7 @@ export const getUsageRecords = query({
   handler: async (ctx, { dashboardPassword, appName, limit }) => {
     const expected = process.env.DASHBOARD_PASSWORD;
     if (!expected) {
-      throw new Error("Convex is missing DASHBOARD_PASSWORD — run `npx convex env set DASHBOARD_PASSWORD=your_password`.");
+      throw new Error("Convex is missing DASHBOARD_PASSWORD - run `npx convex env set DASHBOARD_PASSWORD=your_password`.");
     }
     if (dashboardPassword !== expected) {
       throw new Error("Incorrect dashboard password.");

@@ -39,7 +39,7 @@ http.route({
 
     const b = body as Record<string, unknown>;
 
-    const validApps = ["yatra-ai-next", "digital-twin", "skybot", "dalal-street-ai", "yatra-ai"];
+    const validApps = ["yatra-ai-next", "digital-twin", "skybot", "dalal-street-ai", "yatra-ai", "rootcause-ai"];
     if (typeof b.appName !== "string" || !validApps.includes(b.appName)) {
       return new Response(
         JSON.stringify({ error: `appName must be one of: ${validApps.join(", ")}` }),
@@ -55,7 +55,7 @@ http.route({
 
     try {
       await ctx.runMutation(internal.usage.logUsage, {
-        appName: b.appName as "yatra-ai-next" | "digital-twin" | "skybot" | "dalal-street-ai" | "yatra-ai",
+        appName: b.appName as "yatra-ai-next" | "digital-twin" | "skybot" | "dalal-street-ai" | "yatra-ai" | "rootcause-ai",
         feature: typeof b.feature === "string" ? b.feature : undefined,
         model: b.model,
         promptTokens: typeof b.promptTokens === "number" ? b.promptTokens : 0,

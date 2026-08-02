@@ -6,13 +6,14 @@ export default defineSchema({
     // Which of your four apps this call came from — the key addition vs.
     // Yatra AI Next's original schema, since this table now aggregates
     // across all of them instead of living inside a single app.
-    appName: v.union(
-      v.literal("yatra-ai-next"),
-      v.literal("digital-twin"),
-      v.literal("skybot"),
-      v.literal("dalal-street-ai"),
-      v.literal("yatra-ai")
-    ),
+   appName: v.union(
+  v.literal("yatra-ai-next"),
+  v.literal("digital-twin"),
+  v.literal("skybot"),
+  v.literal("dalal-street-ai"),
+  v.literal("yatra-ai"),
+  v.literal("rootcause-ai")
+),
     // Optional free-text label for what the call was for within that app
     // (e.g. "generateItinerary", "chat", "flightFareRules") — not a strict
     // enum here since each app's features differ; the dashboard can still
