@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as evals from "../evals.js";
 import type * as http from "../http.js";
 import type * as usage from "../usage.js";
 
@@ -18,6 +19,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  evals: typeof evals;
   http: typeof http;
   usage: typeof usage;
 }>;
