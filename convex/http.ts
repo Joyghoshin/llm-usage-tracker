@@ -4,7 +4,7 @@ import { internal } from "./_generated/api";
 
 const http = httpRouter();
 
-const VALID_APPS = ["yatra-ai-next", "digital-twin", "skybot", "dalal-street-ai", "yatra-ai", "rootcause-ai"] as const;
+const VALID_APPS = ["yatra-ai-next", "digital-twin", "skybot", "dalal-street-ai", "yatra-ai", "rootcause-ai", "pcmace-ai"] as const;
 
 http.route({
   path: "/logUsage",
