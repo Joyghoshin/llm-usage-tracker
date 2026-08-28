@@ -6,14 +6,15 @@ import { v } from "convex/values";
 // forwarding here) - apps never call this directly.
 export const logUsage = internalMutation({
   args: {
-   appName: v.union(
+    appName: v.union(
       v.literal("yatra-ai-next"),
       v.literal("digital-twin"),
       v.literal("skybot"),
       v.literal("dalal-street-ai"),
       v.literal("yatra-ai"),
       v.literal("rootcause-ai"),
-      v.literal("pcmace-ai")
+      v.literal("pcmace-ai"),
+      v.literal("doubtmail-ai")
     ),
     feature: v.optional(v.string()),
     model: v.string(),
@@ -35,7 +36,7 @@ export const logUsage = internalMutation({
 export const getUsageRecords = query({
   args: {
     dashboardPassword: v.string(),
- appName: v.optional(
+    appName: v.optional(
       v.union(
         v.literal("yatra-ai-next"),
         v.literal("digital-twin"),
@@ -43,7 +44,8 @@ export const getUsageRecords = query({
         v.literal("dalal-street-ai"),
         v.literal("yatra-ai"),
         v.literal("rootcause-ai"),
-        v.literal("pcmace-ai")
+        v.literal("pcmace-ai"),
+        v.literal("doubtmail-ai")
       )
     ),
     limit: v.optional(v.number()),

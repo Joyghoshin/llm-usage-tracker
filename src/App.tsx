@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 
-const APPS = ["yatra-ai-next", "dalal-street-ai", "rootcause-ai", "pcmace-ai"] as const;
+const APPS = ["yatra-ai-next", "dalal-street-ai", "rootcause-ai", "pcmace-ai", "doubtmail-ai"] as const;
 
 export default function App() {
   const [password, setPassword] = useState("");
@@ -39,7 +39,7 @@ export default function App() {
     <div className="max-w-5xl mx-auto px-6 py-10 space-y-10">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">
-          LLM Usage — YatraAI Next, DalalStreet AI & RootCause AI
+          LLM Usage — YatraAI Next, DalalStreet AI, RootCause AI, PCMAce AI & Doubtmail AI
         </h1>
         <div className="flex gap-2">
           <button

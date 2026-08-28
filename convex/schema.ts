@@ -8,7 +8,8 @@ const APP_NAMES = v.union(
   v.literal("dalal-street-ai"),
   v.literal("yatra-ai"),
   v.literal("rootcause-ai"),
-  v.literal("pcmace-ai")
+  v.literal("pcmace-ai"),
+  v.literal("doubtmail-ai")
 );
 
 export default defineSchema({
