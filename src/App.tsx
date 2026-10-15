@@ -89,6 +89,36 @@ function AppSection({
 
   if (records === undefined) return <div className="text-gray-500">Loading {appName}…</div>;
 
+  const now = records.length ? Math.max(...records.map((r) => r.createdAt)) : Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const currentPeriod = records.filter(r => r.createdAt >= now - sevenDaysMs);
+  const previousPeriod = records.filter(r => r.createdAt < now - sevenDaysMs && r.createdAt >= now - 2 * sevenDaysMs);
+
+  const currentRequests = currentPeriod.length;
+  const previousRequests = previousPeriod.length;
+  const requestsDelta = previousRequests > 0 ? ((currentRequests - previousRequests) / previousRequests) * 100 : null;
+
+  const currentTokens = currentPeriod.reduce((sum, r) => sum + r.totalTokens, 0);
+  const previousTokens = previousPeriod.reduce((sum, r) => sum + r.totalTokens, 0);
+  const tokensDelta = previousTokens > 0 ? ((currentTokens - previousTokens) / previousTokens) * 100 : null;
+
+  const currentLatencies = currentPeriod.map(r => r.latencyMs).sort((a, b) => a - b);
+  const previousLatencies = previousPeriod.map(r => r.latencyMs).sort((a, b) => a - b);
+  const getP95 = (arr: number[]) => {
+    if (arr.length === 0) return 0;
+    const index = Math.ceil(0.95 * arr.length) - 1;
+    return arr[Math.max(0, Math.min(index, arr.length - 1))];
+  };
+  const currentP95 = getP95(currentLatencies);
+  const previousP95 = getP95(previousLatencies);
+  const p95Delta = previousP95 > 0 ? ((currentP95 - previousP95) / previousP95) * 100 : null;
+
+  const currentFailures = currentPeriod.filter(r => !r.success).length;
+  const previousFailures = previousPeriod.filter(r => !r.success).length;
+  const currentErrorRate = currentRequests > 0 ? (currentFailures / currentRequests) * 100 : 0;
+  const previousErrorRate = previousRequests > 0 ? (previousFailures / previousRequests) * 100 : 0;
+  const errorRateDelta = previousErrorRate > 0 ? ((currentErrorRate - previousErrorRate) / previousErrorRate) * 100 : null;
+
   const calls = records.length;
   const totalTokens = records.reduce((s, r) => s + r.totalTokens, 0);
   const avgLatency = calls ? records.reduce((s, r) => s + r.latencyMs, 0) / calls : 0;
@@ -102,6 +132,35 @@ function AppSection({
         <Stat label="Total tokens" value={totalTokens.toLocaleString()} />
         <Stat label="Avg latency" value={`${avgLatency.toFixed(0)} ms`} />
         <Stat label="Failures" value={failures} />
+      </div>
+      <div className="grid grid-cols-4 gap-4">
+        <KpiCard
+          label="Requests"
+          value={currentRequests}
+          delta={requestsDelta}
+          isGood={(d) => d !== null && d >= 0}
+        />
+        <KpiCard
+          label="Tokens"
+          value={currentTokens}
+          delta={tokensDelta}
+          isGood={(d) => d !== null && d >= 0}
+          format={(n) => n.toLocaleString()}
+        />
+        <KpiCard
+          label="P95 latency"
+          value={currentP95}
+          delta={p95Delta}
+          isGood={(d) => d !== null && d <= 0}
+          format={(n) => `${n.toFixed(0)} ms`}
+        />
+        <KpiCard
+          label="Error rate"
+          value={currentErrorRate}
+          delta={errorRateDelta}
+          isGood={(d) => d !== null && d <= 0}
+          format={(n) => `${n.toFixed(1)}%`}
+        />
       </div>
       <table className="w-full text-sm border-collapse">
         <thead>
@@ -134,6 +193,48 @@ function Stat({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-lg border border-white/10 p-4">
       <div className="text-xs text-gray-500">{label}</div>
       <div className="text-xl font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  delta,
+  isGood,
+     format = (v: number) => String(v),
+}: {
+  label: string;
+  value: number;
+  delta: number | null;
+  isGood: (delta: number) => boolean;
+  format?: (value: number) => string;
+}) {
+  const displayValue = format(value);
+  const hasDelta = delta !== null;
+  const deltaText = hasDelta ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%` : "n/a";
+  const deltaSign = hasDelta ? (delta >= 0 ? "▲" : "▼") : "";
+  const isDeltaGood = hasDelta ? isGood(delta) : false;
+  return (
+    <div className="rounded-lg border border-white/10 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-xs text-gray-500">{label}</div>
+          <div className="text-lg font-semibold">{displayValue}</div>
+        </div>
+        <div className="text-xs flex items-center gap-1">
+          {hasDelta ? (
+            <>
+              <span className={`text-sm font-medium ${isDeltaGood ? "text-green-400" : "text-red-400"}`}>
+                {deltaSign}
+              </span>
+              <span className="text-gray-400">{deltaText}</span>
+            </>
+          ) : (
+            <span className="text-gray-400">n/a</span>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
