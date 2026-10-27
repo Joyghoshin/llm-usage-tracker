@@ -1,13 +1,25 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 
 const APPS = ["yatra-ai-next", "dalal-street-ai", "rootcause-ai", "pcmace-ai", "doubtmail-ai", "skybot"] as const;
 
+type DateRangePreset = "24h" | "7d" | "30d" | "all";
+
+const PRESET_MS: Record<DateRangePreset, number | null> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+  "all": null,
+};
+
 export default function App() {
   const [password, setPassword] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [view, setView] = useState<"usage" | "evals">("usage");
+  const [dateRange, setDateRange] = useState<DateRangePreset>("7d");
+  const [selectedApps, setSelectedApps] = useState<string[]>(APPS);
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
 
   if (!submitted) {
     return (
@@ -34,6 +46,35 @@ export default function App() {
       </div>
     );
   }
+
+  // Fetch all records once for the selected apps to derive available models
+  const allRecords = useQuery(api.usage.getUsageRecords, {
+    dashboardPassword: submitted,
+    appName: undefined,
+    limit: 5000,
+  });
+
+  const availableModels = useMemo(() => {
+    if (!allRecords) return [];
+    const models = new Set(allRecords.map(r => r.model));
+    return Array.from(models).sort();
+  }, [allRecords]);
+
+  const handleAppChange = (app: string, checked: boolean) => {
+    setSelectedApps(prev => checked ? [...prev, app] : prev.filter(a => a !== app));
+  };
+
+  const handleModelChange = (model: string, checked: boolean) => {
+    setSelectedModels(prev => checked ? [...prev, model] : prev.filter(m => m !== model));
+  };
+
+  const clearAllFilters = () => {
+    setDateRange("7d");
+    setSelectedApps(APPS);
+    setSelectedModels([]);
+  };
+
+  const hasActiveFilters = dateRange !== "7d" || selectedApps.length !== APPS.length || selectedModels.length > 0;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10 space-y-10">
@@ -62,11 +103,18 @@ export default function App() {
       </div>
 
       {view === "usage" ? (
-        <div className="space-y-10">
-          {APPS.map((app) => (
-            <AppSection key={app} appName={app} password={submitted} />
-          ))}
-        </div>
+        <UsageView
+          password={submitted}
+          dateRange={dateRange}
+          setDateRange={setDateRange}
+          selectedApps={selectedApps}
+          setSelectedApps={setSelectedApps}
+          selectedModels={selectedModels}
+          setSelectedModels={setSelectedModels}
+          availableModels={availableModels}
+          clearAllFilters={clearAllFilters}
+          hasActiveFilters={hasActiveFilters}
+        />
       ) : (
         <EvalsPerformance password={submitted} />
       )}
@@ -74,12 +122,157 @@ export default function App() {
   );
 }
 
+function UsageView({
+  password,
+  dateRange,
+  setDateRange,
+  selectedApps,
+  setSelectedApps,
+  selectedModels,
+  setSelectedModels,
+  availableModels,
+  clearAllFilters,
+  hasActiveFilters,
+}: {
+  password: string;
+  dateRange: DateRangePreset;
+  setDateRange: (v: DateRangePreset) => void;
+  selectedApps: string[];
+  setSelectedApps: (v: string[]) => void;
+  selectedModels: string[];
+  setSelectedModels: (v: string[]) => void;
+  availableModels: string[];
+  clearAllFilters: () => void;
+  hasActiveFilters: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      <FilterBar
+        dateRange={dateRange}
+        setDateRange={setDateRange}
+        selectedApps={selectedApps}
+        setSelectedApps={setSelectedApps}
+        selectedModels={selectedModels}
+        setSelectedModels={setSelectedModels}
+        availableModels={availableModels}
+        clearAllFilters={clearAllFilters}
+        hasActiveFilters={hasActiveFilters}
+      />
+      <div className="space-y-10">
+        {selectedApps.map((app) => (
+          <AppSection
+            key={app}
+            appName={app as typeof APPS[number]}
+            password={password}
+            dateRange={dateRange}
+            selectedModels={selectedModels}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FilterBar({
+  dateRange,
+  setDateRange,
+  selectedApps,
+  setSelectedApps,
+  selectedModels,
+  setSelectedModels,
+  availableModels,
+  clearAllFilters,
+  hasActiveFilters,
+}: {
+  dateRange: DateRangePreset;
+  setDateRange: (v: DateRangePreset) => void;
+  selectedApps: string[];
+  setSelectedApps: (v: string[]) => void;
+  selectedModels: string[];
+  setSelectedModels: (v: string[]) => void;
+  availableModels: string[];
+  clearAllFilters: () => void;
+  hasActiveFilters: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 p-4 space-y-4">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-400">Date range:</label>
+          <div className="flex gap-1 bg-white/5 rounded p-1">
+            {(["24h", "7d", "30d", "all"] as DateRangePreset[]).map((preset) => (
+              <button
+                key={preset}
+                onClick={() => setDateRange(preset)}
+                className={`px-3 py-1.5 text-xs rounded ${
+                  dateRange === preset
+                    ? "bg-white/10 text-white"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                {preset === "24h" ? "24h" : preset === "7d" ? "7d" : preset === "30d" ? "30d" : "All"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-400">Apps:</label>
+          <div className="flex gap-1 bg-white/5 rounded p-1">
+            {APPS.map((app) => (
+              <label key={app} className="flex items-center gap-1 px-2 py-1.5 text-xs rounded cursor-pointer hover:bg-white/5">
+                <input
+                  type="checkbox"
+                  checked={selectedApps.includes(app)}
+                  onChange={(e) => handleAppChange(app, e.target.checked)}
+                  className="rounded border-white/20 text-white bg-white/5 focus:ring-2 focus:ring-white/20"
+                />
+                <span>{app}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-400">Models:</label>
+          <div className="flex gap-1 bg-white/5 rounded p-1 flex-wrap">
+            {availableModels.map((model) => (
+              <label key={model} className="flex items-center gap-1 px-2 py-1.5 text-xs rounded cursor-pointer hover:bg-white/5">
+                <input
+                  type="checkbox"
+                  checked={selectedModels.includes(model)}
+                  onChange={(e) => handleModelChange(model, e.target.checked)}
+                  className="rounded border-white/20 text-white bg-white/5 focus:ring-2 focus:ring-white/20"
+                />
+                <span>{model}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {hasActiveFilters && (
+          <button
+            onClick={clearAllFilters}
+            className="ml-auto text-xs text-gray-400 hover:text-white underline"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AppSection({
   appName,
   password,
+  dateRange,
+  selectedModels,
 }: {
-  appName: (typeof APPS)[number];
+  appName: typeof APPS[number];
   password: string;
+  dateRange: DateRangePreset;
+  selectedModels: string[];
 }) {
   const records = useQuery(api.usage.getUsageRecords, {
     dashboardPassword: password,
@@ -90,9 +283,20 @@ function AppSection({
   if (records === undefined) return <div className="text-gray-500">Loading {appName}…</div>;
 
   const now = records.length ? Math.max(...records.map((r) => r.createdAt)) : Date.now();
-  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-  const currentPeriod = records.filter(r => r.createdAt >= now - sevenDaysMs);
-  const previousPeriod = records.filter(r => r.createdAt < now - sevenDaysMs && r.createdAt >= now - 2 * sevenDaysMs);
+  const windowMs = PRESET_MS[dateRange];
+  const cutoff = windowMs ? now - windowMs : 0;
+
+  const filteredRecords = records.filter(r => {
+    if (r.createdAt < cutoff) return false;
+    if (selectedModels.length > 0 && !selectedModels.includes(r.model)) return false;
+    return true;
+  });
+
+  const currentPeriod = filteredRecords;
+  const previousPeriod = records.filter(r => {
+    if (windowMs === null) return false;
+    return r.createdAt < now - windowMs && r.createdAt >= now - 2 * windowMs;
+  });
 
   const currentRequests = currentPeriod.length;
   const previousRequests = previousPeriod.length;
@@ -119,10 +323,10 @@ function AppSection({
   const previousErrorRate = previousRequests > 0 ? (previousFailures / previousRequests) * 100 : 0;
   const errorRateDelta = previousErrorRate > 0 ? ((currentErrorRate - previousErrorRate) / previousErrorRate) * 100 : null;
 
-  const calls = records.length;
-  const totalTokens = records.reduce((s, r) => s + r.totalTokens, 0);
-  const avgLatency = calls ? records.reduce((s, r) => s + r.latencyMs, 0) / calls : 0;
-  const failures = records.filter((r) => !r.success).length;
+  const calls = filteredRecords.length;
+  const totalTokens = filteredRecords.reduce((s, r) => s + r.totalTokens, 0);
+  const avgLatency = calls ? filteredRecords.reduce((s, r) => s + r.latencyMs, 0) / calls : 0;
+  const failures = filteredRecords.filter((r) => !r.success).length;
 
   return (
     <section className="space-y-4">
@@ -173,7 +377,7 @@ function AppSection({
           </tr>
         </thead>
         <tbody>
-          {records.slice(0, 20).map((r) => (
+          {filteredRecords.slice(0, 20).map((r) => (
             <tr key={r._id} className="border-b border-white/5">
               <td className="py-2">{r.feature ?? "—"}</td>
               <td>{r.model}</td>
@@ -202,7 +406,7 @@ function KpiCard({
   value,
   delta,
   isGood,
-     format = (v: number) => String(v),
+  format = (v: number) => String(v),
 }: {
   label: string;
   value: number;
