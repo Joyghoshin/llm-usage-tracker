@@ -11,7 +11,8 @@
   "dependencies": {
     "convex": "^1.42.3",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
