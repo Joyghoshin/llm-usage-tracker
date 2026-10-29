@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 const APPS = ["yatra-ai-next", "dalal-street-ai", "rootcause-ai", "pcmace-ai", "doubtmail-ai", "skybot"] as const;
 
@@ -94,8 +94,7 @@ function DashboardLayout({ password }: { password: string }) {
 }
 
 function NavigateToOverview() {
-  const navigate = useNavigate();
-  return <div onMount={() => navigate("/overview", { replace: true })} />;
+  return <Navigate to="/overview" replace />;
 }
 
 function OverviewPage({ password }: { password: string }) {
@@ -566,6 +565,7 @@ function RequestsPage({ password }: { password: string }) {
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-lg border border-white/10 p-4">
+
       <div className="text-xs text-gray-500">{label}</div>
       <div className="text-xl font-semibold">{value}</div>
     </div>
