@@ -8,7 +8,8 @@ const APP_NAMES = v.union(
   v.literal("dalal-street-ai"),
   v.literal("yatra-ai"),
   v.literal("rootcause-ai"),
-  v.literal("pcmace-ai")
+  v.literal("pcmace-ai"),
+  v.literal("doubtmail-ai")
 );
 
 // Records a single eval. Only caller is http.ts's /logEval action, which
