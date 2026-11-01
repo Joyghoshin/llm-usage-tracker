@@ -48,6 +48,88 @@ interface TokenCostChartsProps {
   endTime?: number;
 }
 
+
+const COMPACT = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+const TOKEN_COLORS = { input: "#3b82f6", output: "#60a5fa", cost: "#22c55e" } as const;
+
+interface Segment {
+  value: number;
+  color: string;
+  label: string;
+}
+
+const CHART_HEIGHT = 300;
+const MARGIN = { left: 64, right: 16, top: 12, bottom: 36 };
+
+/** A bar chart with room around the plot for axis labels. Each bar is a stack of segments. */
+function BarChart({
+  points,
+  max,
+  segments,
+  formatTick,
+  ariaLabel,
+}: {
+  points: TimeSeriesPoint[];
+  max: number;
+  segments: (p: TimeSeriesPoint) => Segment[];
+  formatTick: (n: number) => string;
+  ariaLabel: string;
+}) {
+  const n = Math.max(points.length, 1);
+  const barWidth = Math.max(24, Math.min(60, 800 / n));
+  const step = barWidth + 8;
+  const width = Math.max(400, MARGIN.left + MARGIN.right + n * step);
+  const plotHeight = CHART_HEIGHT - MARGIN.top - MARGIN.bottom;
+  const baseline = MARGIN.top + plotHeight;
+  const labelEvery = Math.max(1, Math.ceil(56 / step)); // keep date labels from overlapping
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
+
+  return (
+    <div className="overflow-x-auto" role="img" aria-label={ariaLabel}>
+      <svg width={width} height={CHART_HEIGHT} viewBox={`0 0 ${width} ${CHART_HEIGHT}`}>
+        <g stroke="white" strokeOpacity="0.08" strokeWidth="1">
+          {ticks.map((frac) => {
+            const y = baseline - frac * plotHeight;
+            return <line key={frac} x1={MARGIN.left} y1={y} x2={width - MARGIN.right} y2={y} />;
+          })}
+        </g>
+        <g fontSize="11" fill="white" fillOpacity="0.55" textAnchor="end">
+          {ticks.map((frac) => (
+            <text key={frac} x={MARGIN.left - 8} y={baseline - frac * plotHeight} dominantBaseline="middle">
+              {formatTick(max * frac)}
+            </text>
+          ))}
+        </g>
+        <g>
+          {points.map((point, i) => {
+            const x = MARGIN.left + i * step + 4;
+            let top = baseline;
+            return (
+              <g key={point.timestamp}>
+                {segments(point).map((seg) => {
+                  const h = max > 0 ? (seg.value / max) * plotHeight : 0;
+                  if (h <= 0) return null;
+                  top -= h;
+                  return (
+                    <rect key={seg.label} x={x} y={top} width={barWidth} height={h} fill={seg.color} rx={2}>
+                      <title>{`${point.label}: ${seg.label}`}</title>
+                    </rect>
+                  );
+                })}
+                {i % labelEvery === 0 && (
+                  <text x={x + barWidth / 2} y={baseline + 16} textAnchor="middle" fontSize="11" fill="white" fillOpacity="0.65">
+                    {point.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 export function TokenCostCharts({
   password,
   appName,
@@ -102,9 +184,6 @@ export function TokenCostCharts({
   const formatCost = (cost: number) => `$${cost.toFixed(cost < 0.01 ? 4 : 2)}`;
   const formatTokens = (tokens: number) => tokens.toLocaleString();
 
-  const chartHeight = 300;
-  const barWidth = Math.max(24, Math.min(60, 800 / Math.max(timeSeries.length, 1)));
-  const chartWidth = Math.max(400, timeSeries.length * (barWidth + 8));
 
   return (
     <div className="space-y-8">
@@ -184,86 +263,24 @@ export function TokenCostCharts({
               Input vs Output Tokens Over Time
               <span className="text-xs text-gray-500 font-normal">(stacked bars, {bucketName.toLowerCase()} buckets)</span>
             </h3>
-            <div className="overflow-x-auto" role="img" aria-label="Stacked bar chart showing input and output tokens over time">
-              <svg
-                width={chartWidth}
-                height={chartHeight}
-                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                role="graphics-document"
-              >
-                {/* Y-axis grid lines and labels */}
-                <g stroke="white" strokeOpacity="0.05" strokeWidth="1">
-                  {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
-                    const y = chartHeight * (1 - frac) - 20;
-                    return <line key={frac} x1={0} y1={y} x2={chartWidth} y2={y} />;
-                  })}
-                </g>
-                <g fontSize="10" fill="white" fillOpacity="0.5" textAnchor="end">
-                  {[0, 0.25, 0.5, 0.75, 1].map((frac) => (
-                    <text key={frac} x={34} y={chartHeight * (1 - frac) - 16} dominantBaseline="middle">
-                      {formatTokens(maxTokens * frac)}
-                    </text>
-                  ))}
-                </g>
-
-                {/* Bars */}
-                <g>
-                  {timeSeries.map((point, i) => {
-                    const x = i * (barWidth + 8) + 40;
-                    const inputHeight = (point.inputTokens / maxTokens) * (chartHeight - 40);
-                    const outputHeight = (point.outputTokens / maxTokens) * (chartHeight - 40);
-                    const yBase = chartHeight - 20;
-
-                    return (
-                      <g key={point.timestamp} transform={`translate(${x}, 0)`}>
-                        {/* Output tokens (top) */}
-                        <rect
-                          x={0}
-                          y={yBase - inputHeight - outputHeight}
-                          width={barWidth}
-                          height={outputHeight}
-                          fill="#60a5fa"
-                          rx={2}
-                          role="graphics-symbol"
-                          aria-label={`Output tokens: ${formatTokens(point.outputTokens)}`}
-                        />
-                        {/* Input tokens (bottom) */}
-                        <rect
-                          x={0}
-                          y={yBase - inputHeight}
-                          width={barWidth}
-                          height={inputHeight}
-                          fill="#3b82f6"
-                          rx={2}
-                          role="graphics-symbol"
-                          aria-label={`Input tokens: ${formatTokens(point.inputTokens)}`}
-                        />
-                        {/* X-axis label */}
-                        <text
-                          x={barWidth / 2}
-                          y={chartHeight - 4}
-                          textAnchor="middle"
-                          fontSize="10"
-                          fill="white"
-                          fillOpacity="0.6"
-                          dominantBaseline="hanging"
-                        >
-                          {point.label}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </g>
-
-                {/* Legend */}
-                <g transform={`translate(${chartWidth - 160}, 20)`}>
-                  <rect x={0} y={0} width={12} height={12} fill="#3b82f6" rx={2} />
-                  <text x={18} y={10} fontSize="11" fill="white" dominantBaseline="middle">Input tokens</text>
-                  <rect x={0} y={20} width={12} height={12} fill="#60a5fa" rx={2} />
-                  <text x={18} y={30} fontSize="11" fill="white" dominantBaseline="middle">Output tokens</text>
-                </g>
-              </svg>
+            <div className="flex items-center gap-4 text-xs text-gray-400">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3 w-3 rounded-sm" style={{ background: TOKEN_COLORS.input }} /> Input tokens
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3 w-3 rounded-sm" style={{ background: TOKEN_COLORS.output }} /> Output tokens
+              </span>
             </div>
+            <BarChart
+              points={timeSeries}
+              max={maxTokens}
+              formatTick={(n) => COMPACT.format(n)}
+              ariaLabel="Stacked bar chart showing input and output tokens over time"
+              segments={(p) => [
+                { value: p.inputTokens, color: TOKEN_COLORS.input, label: `Input ${formatTokens(p.inputTokens)}` },
+                { value: p.outputTokens, color: TOKEN_COLORS.output, label: `Output ${formatTokens(p.outputTokens)}` },
+              ]}
+            />
 
             {/* Chart data table for accessibility */}
             <details className="border border-white/10 rounded-lg overflow-hidden">
@@ -306,62 +323,13 @@ export function TokenCostCharts({
               Estimated Cost Over Time
               <span className="text-xs text-gray-500 font-normal">({bucketName.toLowerCase()} buckets)</span>
             </h3>
-            <div className="overflow-x-auto" role="img" aria-label="Bar chart showing estimated cost over time">
-              <svg
-                width={chartWidth}
-                height={chartHeight}
-                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                role="graphics-document"
-              >
-                <g stroke="white" strokeOpacity="0.05" strokeWidth="1">
-                  {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
-                    const y = chartHeight * (1 - frac) - 20;
-                    return <line key={frac} x1={0} y1={y} x2={chartWidth} y2={y} />;
-                  })}
-                </g>
-                <g fontSize="10" fill="white" fillOpacity="0.5" textAnchor="end">
-                  {[0, 0.25, 0.5, 0.75, 1].map((frac) => (
-                    <text key={frac} x={34} y={chartHeight * (1 - frac) - 16} dominantBaseline="middle">
-                      {formatCost(maxCost * frac)}
-                    </text>
-                  ))}
-                </g>
-
-                <g>
-                  {timeSeries.map((point, i) => {
-                    const x = i * (barWidth + 8) + 40;
-                    const costHeight = (point.cost / maxCost) * (chartHeight - 40);
-                    const yBase = chartHeight - 20;
-
-                    return (
-                      <g key={point.timestamp} transform={`translate(${x}, 0)`}>
-                        <rect
-                          x={0}
-                          y={yBase - costHeight}
-                          width={barWidth}
-                          height={Math.max(costHeight, 1)}
-                          fill="#22c55e"
-                          rx={2}
-                          role="graphics-symbol"
-                          aria-label={`Cost: ${formatCost(point.cost)}`}
-                        />
-                        <text
-                          x={barWidth / 2}
-                          y={chartHeight - 4}
-                          textAnchor="middle"
-                          fontSize="10"
-                          fill="white"
-                          fillOpacity="0.6"
-                          dominantBaseline="hanging"
-                        >
-                          {point.label}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </g>
-              </svg>
-            </div>
+            <BarChart
+              points={timeSeries}
+              max={maxCost}
+              formatTick={formatCost}
+              ariaLabel="Bar chart showing estimated cost over time"
+              segments={(p) => [{ value: p.cost, color: TOKEN_COLORS.cost, label: `Est. cost ${formatCost(p.cost)}` }]}
+            />
 
             <details className="border border-white/10 rounded-lg overflow-hidden">
               <summary className="p-3 cursor-pointer text-sm text-gray-400 hover:text-white list-none flex items-center gap-2">
