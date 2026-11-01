@@ -46,6 +46,7 @@ interface TokenCostChartsProps {
   bucket?: Bucket;
   startTime?: number;
   endTime?: number;
+  onClearFilters?: () => void;
 }
 
 const COMPACT = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
@@ -221,7 +222,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   return (
     <div className="text-center py-12" role="alert">
       <svg className="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
       <p className="text-lg text-red-300 mt-4">Failed to load data</p>
       <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">{message}</p>
@@ -243,6 +244,7 @@ export function TokenCostCharts({
   bucket = "day",
   startTime,
   endTime,
+  onClearFilters,
 }: TokenCostChartsProps) {
   const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
   const [selectedBucket, setSelectedBucket] = useState<Bucket>(bucket);
@@ -308,8 +310,12 @@ export function TokenCostCharts({
   const hasData = timeSeries.length > 0 || appBreakdown.length > 0 || modelBreakdown.length > 0;
 
   const handleClearFilters = () => {
-    // This will be handled by parent component via URL params
-    window.location.href = window.location.pathname;
+    if (onClearFilters) {
+      onClearFilters();
+    } else {
+      // Fallback: navigate to base path without query params (legacy behavior)
+      window.location.href = window.location.pathname;
+    }
   };
 
   if (!hasData) {
@@ -524,7 +530,7 @@ export function TokenCostCharts({
                         <dd className="font-mono text-blue-300">{formatTokens(item.outputTokens)}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-gray-400">Total Tokens</dt>
+                        <dt className="text-gray-400">Total Tokens</td>
                         <dd className="font-mono">{formatTokens(item.totalTokens)}</dd>
                       </div>
                       <div className="flex justify-between">
