@@ -32,7 +32,12 @@ interface AggregatesData {
   modelBreakdown: BreakdownItem[];
   priceTable: Record<string, { input: number; output: number }>;
   defaultPrice: { input: number; output: number };
+  /** true when the window held more records than one query reads; the oldest were left out */
+  truncated?: boolean;
 }
+
+const BUCKET_NAMES: Record<Bucket, string> = { hour: "Hourly", day: "Daily", week: "Weekly" };
+const formatPrice = (n: number) => (n < 1 ? n.toFixed(3) : n.toFixed(2));
 
 interface TokenCostChartsProps {
   password: string;
@@ -54,7 +59,7 @@ export function TokenCostCharts({
   const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
   const [selectedBucket, setSelectedBucket] = useState<Bucket>(bucket);
 
-  const aggregates = useQuery(api.usage.getTokenCostAggregates, {
+  const aggregates: AggregatesData | undefined = useQuery(api.usage.getTokenCostAggregates, {
     dashboardPassword: password,
     appName: appName as any,
     model,
@@ -62,6 +67,12 @@ export function TokenCostCharts({
     startTime,
     endTime,
   });
+
+  // All hooks must run on every render, before any early return below (rules of hooks):
+  // while the data is loading `aggregates` is undefined, and these still have to be called.
+  const series = aggregates?.timeSeries;
+  const maxTokens = useMemo(() => Math.max(...(series ?? []).map((p) => p.totalTokens), 1), [series]);
+  const maxCost = useMemo(() => Math.max(...(series ?? []).map((p) => p.cost), 0.001), [series]);
 
   if (aggregates === undefined) {
     return (
@@ -86,8 +97,7 @@ export function TokenCostCharts({
     );
   }
 
-  const maxTokens = useMemo(() => Math.max(...timeSeries.map((p) => p.totalTokens), 1), [timeSeries]);
-  const maxCost = useMemo(() => Math.max(...timeSeries.map((p) => p.cost), 0.001), [timeSeries]);
+  const bucketName = BUCKET_NAMES[selectedBucket];
 
   const formatCost = (cost: number) => `$${cost.toFixed(cost < 0.01 ? 4 : 2)}`;
   const formatTokens = (tokens: number) => tokens.toLocaleString();
@@ -137,6 +147,12 @@ export function TokenCostCharts({
         </select>
       </div>
 
+      {aggregates.truncated && (
+        <p className="text-xs text-yellow-400" role="note">
+          This window has more records than one query reads, so the oldest are left out. Narrow the date range for exact totals.
+        </p>
+      )}
+
       {/* Price Table Assumption Notice */}
       <details className="group border border-white/10 rounded-lg overflow-hidden">
         <summary className="flex items-center justify-between p-4 cursor-pointer list-none">
@@ -149,12 +165,12 @@ export function TokenCostCharts({
             {Object.entries(priceTable).map(([model, prices]) => (
               <div key={model} className="bg-white/5 p-2 rounded">
                 <div className="font-mono text-white">{model}</div>
-                <div className="text-gray-500">In: ${prices.input.toFixed(2)} / Out: ${prices.output.toFixed(2)} per 1M</div>
+                <div className="text-gray-500">In: ${formatPrice(prices.input)} / Out: ${formatPrice(prices.output)} per 1M</div>
               </div>
             ))}
             <div className="bg-white/5 p-2 rounded">
               <div className="font-mono text-white">Default (unknown models)</div>
-              <div className="text-gray-500">In: ${defaultPrice.input.toFixed(2)} / Out: ${defaultPrice.output.toFixed(2)} per 1M</div>
+              <div className="text-gray-500">In: ${formatPrice(defaultPrice.input)} / Out: ${formatPrice(defaultPrice.output)} per 1M</div>
             </div>
           </div>
         </div>
@@ -166,27 +182,25 @@ export function TokenCostCharts({
           <section aria-labelledby="tokens-chart-title" className="space-y-4">
             <h3 id="tokens-chart-title" className="text-lg font-medium flex items-center gap-2">
               Input vs Output Tokens Over Time
-              <span className="text-xs text-gray-500 font-normal">(stacked bars, {selectedBucket}ly buckets)</span>
+              <span className="text-xs text-gray-500 font-normal">(stacked bars, {bucketName.toLowerCase()} buckets)</span>
             </h3>
-            <div className="relative" style={{ height: chartHeight, width: chartWidth, minWidth: "100%" }} role="img" aria-label="Stacked bar chart showing input and output tokens over time">
+            <div className="overflow-x-auto" role="img" aria-label="Stacked bar chart showing input and output tokens over time">
               <svg
+                width={chartWidth}
+                height={chartHeight}
                 viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                preserveAspectRatio="none"
-                className="w-full h-full"
                 role="graphics-document"
               >
                 {/* Y-axis grid lines and labels */}
-                <g stroke="white" stroke-opacity="0.05" stroke-width="1">
-                  {[0, 0.25, 0.5, 0.75, 1].forEach((frac) => {
+                <g stroke="white" strokeOpacity="0.05" strokeWidth="1">
+                  {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
                     const y = chartHeight * (1 - frac) - 20;
-                    return (
-                      <line key={frac} x1={0} y1={y} x2={chartWidth} y2={y} />
-                    );
+                    return <line key={frac} x1={0} y1={y} x2={chartWidth} y2={y} />;
                   })}
                 </g>
                 <g fontSize="10" fill="white" fillOpacity="0.5" textAnchor="end">
                   {[0, 0.25, 0.5, 0.75, 1].map((frac) => (
-                    <text key={frac} x={-8} y={chartHeight * (1 - frac) - 16} dominantBaseline="middle">
+                    <text key={frac} x={34} y={chartHeight * (1 - frac) - 16} dominantBaseline="middle">
                       {formatTokens(maxTokens * frac)}
                     </text>
                   ))}
@@ -290,24 +304,24 @@ export function TokenCostCharts({
           <section aria-labelledby="cost-chart-title" className="space-y-4">
             <h3 id="cost-chart-title" className="text-lg font-medium flex items-center gap-2">
               Estimated Cost Over Time
-              <span className="text-xs text-gray-500 font-normal">({selectedBucket}ly buckets)</span>
+              <span className="text-xs text-gray-500 font-normal">({bucketName.toLowerCase()} buckets)</span>
             </h3>
-            <div className="relative" style={{ height: chartHeight, width: chartWidth, minWidth: "100%" }} role="img" aria-label="Bar chart showing estimated cost over time">
+            <div className="overflow-x-auto" role="img" aria-label="Bar chart showing estimated cost over time">
               <svg
+                width={chartWidth}
+                height={chartHeight}
                 viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                preserveAspectRatio="none"
-                className="w-full h-full"
                 role="graphics-document"
               >
-                <g stroke="white" stroke-opacity="0.05" stroke-width="1">
-                  {[0, 0.25, 0.5, 0.75, 1].forEach((frac) => {
+                <g stroke="white" strokeOpacity="0.05" strokeWidth="1">
+                  {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
                     const y = chartHeight * (1 - frac) - 20;
                     return <line key={frac} x1={0} y1={y} x2={chartWidth} y2={y} />;
                   })}
                 </g>
                 <g fontSize="10" fill="white" fillOpacity="0.5" textAnchor="end">
                   {[0, 0.25, 0.5, 0.75, 1].map((frac) => (
-                    <text key={frac} x={-8} y={chartHeight * (1 - frac) - 16} dominantBaseline="middle">
+                    <text key={frac} x={34} y={chartHeight * (1 - frac) - 16} dominantBaseline="middle">
                       {formatCost(maxCost * frac)}
                     </text>
                   ))}
@@ -531,7 +545,7 @@ export function TokenCostCharts({
         <div className="space-y-8">
           {/* Table View - Full Data Tables */}
           <section aria-labelledby="tokens-table-title" className="space-y-4">
-            <h3 id="tokens-table-title" className="text-lg font-medium">Tokens Over Time ({selectedBucket}ly)</h3>
+            <h3 id="tokens-table-title" className="text-lg font-medium">Tokens Over Time ({bucketName})</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm" role="table">
                 <thead>
