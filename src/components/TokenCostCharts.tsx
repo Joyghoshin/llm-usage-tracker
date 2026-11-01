@@ -530,7 +530,7 @@ export function TokenCostCharts({
                         <dd className="font-mono text-blue-300">{formatTokens(item.outputTokens)}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-gray-400">Total Tokens</td>
+                        <dt className="text-gray-400">Total Tokens</dt>
                         <dd className="font-mono">{formatTokens(item.totalTokens)}</dd>
                       </div>
                       <div className="flex justify-between">
