@@ -74,6 +74,47 @@ export const getUsageRecords = query({
 });
 
 // Aggregated token and cost data for charts, grouped by time bucket, app, and model
+//
+// Reads only the requested date window (using the createdAt index), newest first, and never more than
+// MAX_ROWS_PER_CALL records, so one chart load cannot hit Convex's per-query read limits. When there
+// is more data than that, `truncated` is true and the oldest records in the window are left out.
+const MAX_ROWS_PER_CALL = 8000;
+
+// Rough list prices in USD per 1M tokens. Models not listed use DEFAULT_PRICE_PER_M, so the cost
+// numbers are estimates for comparing apps and models, not a bill.
+const PRICE_PER_M: Record<string, { input: number; output: number }> = {
+  "gpt-4o": { input: 2.5, output: 10 },
+  "gpt-4o-mini": { input: 0.15, output: 0.6 },
+  "gpt-4-turbo": { input: 10, output: 30 },
+  "gpt-3.5-turbo": { input: 0.5, output: 1.5 },
+  "claude-3-5-sonnet-20241022": { input: 3, output: 15 },
+  "claude-3-5-haiku-20241022": { input: 0.8, output: 4 },
+  "claude-3-opus-20240229": { input: 15, output: 75 },
+  "gemini-1.5-pro": { input: 1.25, output: 5 },
+  "gemini-1.5-flash": { input: 0.075, output: 0.3 },
+};
+const DEFAULT_PRICE_PER_M = { input: 1, output: 3 };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+type Totals = { inputTokens: number; outputTokens: number; cost: number; calls: number };
+
+function bump<K>(map: Map<K, Totals>, key: K, input: number, output: number, cost: number) {
+  const t = map.get(key) ?? { inputTokens: 0, outputTokens: 0, cost: 0, calls: 0 };
+  t.inputTokens += input;
+  t.outputTokens += output;
+  t.cost += cost;
+  t.calls += 1;
+  map.set(key, t);
+}
+
+function bucketLabel(timestamp: number, bucket: "hour" | "day" | "week"): string {
+  const d = new Date(timestamp); // UTC on purpose: the server has no user time zone
+  const day = `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  return bucket === "hour" ? `${day} ${String(d.getUTCHours()).padStart(2, "0")}:00` : day;
+}
+
+const withTotals = (t: Totals) => ({ ...t, totalTokens: t.inputTokens + t.outputTokens });
+
 export const getTokenCostAggregates = query({
   args: {
     dashboardPassword: v.string(),
@@ -103,134 +144,66 @@ export const getTokenCostAggregates = query({
       throw new Error("Incorrect dashboard password.");
     }
 
-    let queryBuilder = ctx.db.query("llmUsage");
+    const lo = startTime ?? 0;
+    const hi = endTime ?? Number.MAX_SAFE_INTEGER;
+    const base = appName
+      ? ctx.db
+          .query("llmUsage")
+          .withIndex("by_appName_and_createdAt", (q) => q.eq("appName", appName).gte("createdAt", lo).lte("createdAt", hi))
+      : ctx.db.query("llmUsage").withIndex("by_createdAt", (q) => q.gte("createdAt", lo).lte("createdAt", hi));
 
-    if (appName) {
-      queryBuilder = queryBuilder.withIndex("by_appName_and_createdAt", (q) => q.eq("appName", appName));
-    } else {
-      queryBuilder = queryBuilder.withIndex("by_createdAt");
+    const fetched = await base.order("desc").take(MAX_ROWS_PER_CALL + 1);
+    const truncated = fetched.length > MAX_ROWS_PER_CALL;
+    const rows = (truncated ? fetched.slice(0, MAX_ROWS_PER_CALL) : fetched).filter((r) => !model || r.model === model);
+
+    const bucketMs = bucket === "hour" ? 3_600_000 : bucket === "day" ? 86_400_000 : 604_800_000;
+    const byTime = new Map<number, Totals>();
+    const byApp = new Map<string, Totals>();
+    const byModel = new Map<string, Totals>();
+
+    for (const r of rows) {
+      const price = PRICE_PER_M[r.model] ?? DEFAULT_PRICE_PER_M;
+      const cost = (r.promptTokens * price.input + r.completionTokens * price.output) / 1_000_000;
+      bump(byTime, Math.floor(r.createdAt / bucketMs) * bucketMs, r.promptTokens, r.completionTokens, cost);
+      bump(byApp, r.appName, r.promptTokens, r.completionTokens, cost);
+      bump(byModel, r.model, r.promptTokens, r.completionTokens, cost);
     }
 
-    if (startTime !== undefined) {
-      queryBuilder = queryBuilder.filter((q) => q.gte(q.field("createdAt"), startTime));
-    }
-    if (endTime !== undefined) {
-      queryBuilder = queryBuilder.filter((q) => q.lte(q.field("createdAt"), endTime));
-    }
-
-    const records = await queryBuilder.collect();
-
-    let filtered = records;
-    if (model) {
-      filtered = filtered.filter((r) => r.model === model);
-    }
-
-    const bucketMs = bucket === "hour" ? 3600000 : bucket === "day" ? 86400000 : 604800000;
-    const now = Date.now();
-    const defaultStart = now - 30 * 86400000;
-    const start = startTime ?? defaultStart;
-    const end = endTime ?? now;
-
-    const buckets: Map<number, { inputTokens: number; outputTokens: number; cost: number; calls: number }> = new Map();
-    const byApp: Map<string, { inputTokens: number; outputTokens: number; cost: number; calls: number }> = new Map();
-    const byModel: Map<string, { inputTokens: number; outputTokens: number; cost: number; calls: number }> = new Map();
-
-    const priceTable: Record<string, { input: number; output: number }> = {
-      "gpt-4o": { input: 2.50 / 1_000_000, output: 10.00 / 1_000_000 },
-      "gpt-4o-mini": { input: 0.15 / 1_000_000, output: 0.60 / 1_000_000 },
-      "gpt-4-turbo": { input: 10.00 / 1_000_000, output: 30.00 / 1_000_000 },
-      "gpt-3.5-turbo": { input: 0.50 / 1_000_000, output: 1.50 / 1_000_000 },
-      "claude-3-5-sonnet-20241022": { input: 3.00 / 1_000_000, output: 15.00 / 1_000_000 },
-      "claude-3-5-haiku-20241022": { input: 0.80 / 1_000_000, output: 4.00 / 1_000_000 },
-      "claude-3-opus-20240229": { input: 15.00 / 1_000_000, output: 75.00 / 1_000_000 },
-      "gemini-1.5-pro": { input: 1.25 / 1_000_000, output: 5.00 / 1_000_000 },
-      "gemini-1.5-flash": { input: 0.075 / 1_000_000, output: 0.30 / 1_000_000 },
-    };
-
-    const defaultPrice = { input: 1.00 / 1_000_000, output: 3.00 / 1_000_000 };
-
-    for (const r of filtered) {
-      const bucketKey = Math.floor(r.createdAt / bucketMs) * bucketMs;
-      const existing = buckets.get(bucketKey) ?? { inputTokens: 0, outputTokens: 0, cost: 0, calls: 0 };
-      existing.inputTokens += r.promptTokens;
-      existing.outputTokens += r.completionTokens;
-      existing.calls += 1;
-
-      const prices = priceTable[r.model] ?? defaultPrice;
-      existing.cost += (r.promptTokens * prices.input) + (r.completionTokens * prices.output);
-      buckets.set(bucketKey, existing);
-
-      const appKey = r.appName;
-      const appExisting = byApp.get(appKey) ?? { inputTokens: 0, outputTokens: 0, cost: 0, calls: 0 };
-      appExisting.inputTokens += r.promptTokens;
-      appExisting.outputTokens += r.completionTokens;
-      appExisting.calls += 1;
-      appExisting.cost += (r.promptTokens * prices.input) + (r.completionTokens * prices.output);
-      byApp.set(appKey, appExisting);
-
-      const modelKey = r.model;
-      const modelExisting = byModel.get(modelKey) ?? { inputTokens: 0, outputTokens: 0, cost: 0, calls: 0 };
-      modelExisting.inputTokens += r.promptTokens;
-      modelExisting.outputTokens += r.completionTokens;
-      modelExisting.calls += 1;
-      modelExisting.cost += (r.promptTokens * prices.input) + (r.completionTokens * prices.output);
-      byModel.set(modelKey, modelExisting);
-    }
-
-    const timeSeries = Array.from(buckets.entries())
+    const timeSeries = Array.from(byTime.entries())
       .sort(([a], [b]) => a - b)
-      .map(([timestamp, data]) => ({
-        timestamp,
-        label: new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: bucket === "hour" ? "2-digit" : undefined }),
-        inputTokens: data.inputTokens,
-        outputTokens: data.outputTokens,
-        totalTokens: data.inputTokens + data.outputTokens,
-        cost: data.cost,
-        calls: data.calls,
-      }));
+      .map(([timestamp, t]) => ({ timestamp, label: bucketLabel(timestamp, bucket), ...withTotals(t) }));
 
     const appBreakdown = Array.from(byApp.entries())
-      .map(([app, data]) => ({
-        app,
-        inputTokens: data.inputTokens,
-        outputTokens: data.outputTokens,
-        totalTokens: data.inputTokens + data.outputTokens,
-        cost: data.cost,
-        calls: data.calls,
-      }))
+      .map(([app, t]) => ({ app, ...withTotals(t) }))
       .sort((a, b) => b.cost - a.cost);
 
-    const modelBreakdown = Array.from(byModel.entries())
-      .map(([model, data]) => ({
-        model,
-        inputTokens: data.inputTokens,
-        outputTokens: data.outputTokens,
-        totalTokens: data.inputTokens + data.outputTokens,
-        cost: data.cost,
-        calls: data.calls,
-      }))
+    const allModels = Array.from(byModel.entries())
+      .map(([m, t]) => ({ model: m, ...withTotals(t) }))
       .sort((a, b) => b.cost - a.cost);
-
-    const topN = 5;
-    const topModels = modelBreakdown.slice(0, topN);
-    const otherModels = modelBreakdown.slice(topN);
-    const otherCost = otherModels.reduce((s, m) => s + m.cost, 0);
-    const otherInputTokens = otherModels.reduce((s, m) => s + m.inputTokens, 0);
-    const otherOutputTokens = otherModels.reduce((s, m) => s + m.outputTokens, 0);
-    const otherCalls = otherModels.reduce((s, m) => s + m.calls, 0);
-
-    const modelBreakdownWithOther = otherModels.length > 0
-      ? [...topModels, { model: "Other", inputTokens: otherInputTokens, outputTokens: otherOutputTokens, totalTokens: otherInputTokens + otherOutputTokens, cost: otherCost, calls: otherCalls }]
-      : topModels;
+    const TOP_MODELS = 5;
+    const rest = allModels.slice(TOP_MODELS);
+    const modelBreakdown =
+      rest.length > 0
+        ? [
+            ...allModels.slice(0, TOP_MODELS),
+            {
+              model: "Other",
+              inputTokens: rest.reduce((s, m) => s + m.inputTokens, 0),
+              outputTokens: rest.reduce((s, m) => s + m.outputTokens, 0),
+              totalTokens: rest.reduce((s, m) => s + m.totalTokens, 0),
+              cost: rest.reduce((s, m) => s + m.cost, 0),
+              calls: rest.reduce((s, m) => s + m.calls, 0),
+            },
+          ]
+        : allModels;
 
     return {
       timeSeries,
       appBreakdown,
-      modelBreakdown: modelBreakdownWithOther,
-      priceTable: Object.fromEntries(
-        Object.entries(priceTable).map(([model, prices]) => [model, { input: prices.input * 1_000_000, output: prices.output * 1_000_000 }])
-      ),
-      defaultPrice: { input: defaultPrice.input * 1_000_000, output: defaultPrice.output * 1_000_000 },
+      modelBreakdown,
+      priceTable: PRICE_PER_M,
+      defaultPrice: DEFAULT_PRICE_PER_M,
+      truncated,
     };
   },
 });
