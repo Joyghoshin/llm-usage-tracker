@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { Component, useState, useEffect, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import {
@@ -10,6 +10,7 @@ import {
   useLocation,
   useParams,
 } from "react-router-dom";
+import { TokenCostCharts } from "./components/TokenCostCharts";
 
 const APPS = ["yatra-ai-next", "dalal-street-ai", "rootcause-ai", "pcmace-ai", "doubtmail-ai", "skybot"] as const;
 
@@ -124,6 +125,24 @@ function splitPeriods(records: UsageRecord[], f: FilterValues) {
       ? scoped.filter((r) => r.createdAt < newest - windowMs && r.createdAt >= newest - 2 * windowMs)
       : [],
   };
+}
+
+/** Time bounds for the token/cost charts that match the selected date range (undefined = no bound). */
+function chartRange(records: UsageRecord[], f: FilterValues): { startTime?: number; endTime?: number } {
+  const ms = (s: string) => {
+    const t = new Date(s).getTime();
+    return Number.isNaN(t) ? undefined : t;
+  };
+  if (f.dateRange === "custom") {
+    const end = f.customEnd ? ms(f.customEnd) : undefined;
+    return {
+      startTime: f.customStart ? ms(f.customStart) : undefined,
+      endTime: end === undefined ? undefined : end + DAY_MS - 1,
+    };
+  }
+  const windowMs = PRESET_MS[f.dateRange];
+  if (!windowMs || records.length === 0) return {};
+  return { startTime: Math.max(...records.map((r) => r.createdAt)) - windowMs };
 }
 
 const pctChange = (cur: number, prev: number): number | null => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
@@ -466,6 +485,60 @@ function groupByApp(rs: UsageRecord[]) {
   return byApp;
 }
 
+/** If the charts cannot load (for example the backend function is not deployed yet), show a message
+ *  instead of taking the whole dashboard down. Reload the page after fixing it. */
+class ChartsBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state: { error: string | null } = { error: null };
+  static getDerivedStateFromError(e: unknown) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <EmptyState
+          message={`Charts could not load. If the backend was just updated, deploy it (npx convex dev) and reload. (${this.state.error.slice(0, 160)})`}
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function ChartsSection({
+  password,
+  filters,
+  records,
+  appName,
+}: {
+  password: string;
+  filters: Filters;
+  records: UsageRecord[];
+  appName?: string;
+}) {
+  const { selectedApps, selectedModels } = filters;
+  const range = chartRange(records, filters);
+  const partialApps = appName === undefined && selectedApps.length > 1 && selectedApps.length < APPS.length;
+  return (
+    <section className="space-y-3">
+      <h3 className="text-lg font-medium">Tokens and cost</h3>
+      <ChartsBoundary>
+        <TokenCostCharts
+          password={password}
+          appName={appName ?? (selectedApps.length === 1 ? selectedApps[0] : undefined)}
+          model={selectedModels.length === 1 ? selectedModels[0] : undefined}
+          startTime={range.startTime}
+          endTime={range.endTime}
+        />
+      </ChartsBoundary>
+      {(partialApps || selectedModels.length > 1) && (
+        <p className="text-xs text-gray-500">
+          The charts cover all apps and models unless exactly one is ticked in the filters.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function OverviewPage({ password, filters }: { password: string; filters: Filters }) {
   const records = useQuery(api.usage.getUsageRecords, {
     dashboardPassword: password,
@@ -489,6 +562,8 @@ function OverviewPage({ password, filters }: { password: string; filters: Filter
 
       <StatRow rs={current} />
       <KpiRow kpis={computeKpis(current, previous)} />
+
+      <ChartsSection password={password} filters={filters} records={inScope} />
 
       <section className="space-y-4">
         <h3 className="text-lg font-medium">By app</h3>
@@ -641,6 +716,8 @@ function AppDetailPage({ password, filters }: { password: string; filters: Filte
 
       <StatRow rs={current} />
       <KpiRow kpis={computeKpis(current, previous)} />
+
+      <ChartsSection password={password} filters={filters} records={records} appName={knownApp} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="space-y-4">

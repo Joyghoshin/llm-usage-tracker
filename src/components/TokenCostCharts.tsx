@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
+import { api } from "../../convex/_generated/api";
 
 type Bucket = "hour" | "day" | "week";
 
@@ -528,8 +528,8 @@ export function TokenCostCharts({
           )}
         </div>
       ) : (
-        {/* Table View - Full Data Tables */}
         <div className="space-y-8">
+          {/* Table View - Full Data Tables */}
           <section aria-labelledby="tokens-table-title" className="space-y-4">
             <h3 id="tokens-table-title" className="text-lg font-medium">Tokens Over Time ({selectedBucket}ly)</h3>
             <div className="overflow-x-auto">
