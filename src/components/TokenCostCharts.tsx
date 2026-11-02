@@ -130,113 +130,6 @@ function BarChart({
   );
 }
 
-/** Skeleton loader for chart sections */
-function ChartSkeleton() {
-  return (
-    <div className="space-y-4" role="status" aria-live="polite" aria-label="Loading chart data">
-      <div className="h-8 w-48 animate-pulse bg-white/5 rounded" />
-      <div className="h-64 w-full animate-pulse bg-white/5 rounded-lg" />
-      <div className="h-8 w-32 animate-pulse bg-white/5 rounded" />
-      <div className="h-64 w-full animate-pulse bg-white/5 rounded-lg" />
-    </div>
-  );
-}
-
-/** Skeleton loader for table sections */
-function TableSkeleton() {
-  return (
-    <div className="space-y-4" role="status" aria-live="polite" aria-label="Loading table data">
-      <div className="h-8 w-48 animate-pulse bg-white/5 rounded" />
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm" role="table">
-          <thead>
-            <tr className="text-left border-b border-white/10 text-gray-400">
-              <th className="py-2 px-3" scope="col"><div className="h-4 w-24 animate-pulse bg-white/10 rounded" /></th>
-              <th className="py-2 px-3" scope="col"><div className="h-4 w-24 animate-pulse bg-white/10 rounded" /></th>
-              <th className="py-2 px-3" scope="col"><div className="h-4 w-24 animate-pulse bg-white/10 rounded" /></th>
-              <th className="py-2 px-3" scope="col"><div className="h-4 w-24 animate-pulse bg-white/10 rounded" /></th>
-              <th className="py-2 px-3" scope="col"><div className="h-4 w-24 animate-pulse bg-white/10 rounded" /></th>
-              <th className="py-2 px-3" scope="col"><div className="h-4 w-24 animate-pulse bg-white/10 rounded" /></th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...Array(5)].map((_, i) => (
-              <tr key={i} className="border-b border-white/5">
-                <td className="py-2 px-3"><div className="h-4 w-20 animate-pulse bg-white/10 rounded" /></td>
-                <td className="py-2 px-3"><div className="h-4 w-20 animate-pulse bg-white/10 rounded" /></td>
-                <td className="py-2 px-3"><div className="h-4 w-20 animate-pulse bg-white/10 rounded" /></td>
-                <td className="py-2 px-3"><div className="h-4 w-20 animate-pulse bg-white/10 rounded" /></td>
-                <td className="py-2 px-3"><div className="h-4 w-20 animate-pulse bg-white/10 rounded" /></td>
-                <td className="py-2 px-3"><div className="h-4 w-20 animate-pulse bg-white/10 rounded" /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/** Skeleton loader for breakdown cards */
-function BreakdownSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-live="polite" aria-label="Loading breakdown data">
-      {[...Array(6)].map((_, i) => (
-        <article key={i} className="rounded-lg border border-white/10 p-4 bg-white/5 animate-pulse">
-          <div className="h-5 w-32 bg-white/10 rounded mb-2" />
-          <div className="space-y-1">
-            <div className="h-4 w-24 bg-white/10 rounded" />
-            <div className="h-4 w-24 bg-white/10 rounded" />
-            <div className="h-4 w-24 bg-white/10 rounded" />
-            <div className="h-4 w-24 bg-white/10 rounded" />
-            <div className="h-4 w-24 bg-white/10 rounded" />
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-/** Empty state component */
-function EmptyState({ onClearFilters }: { onClearFilters: () => void }) {
-  return (
-    <div className="text-center py-12" role="status">
-      <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-      <p className="text-lg text-gray-300 mt-4">No usage data for the selected filters.</p>
-      <p className="text-sm text-gray-500 mt-1">Adjust the date range, app, or model filters to see data.</p>
-      <button
-        onClick={onClearFilters}
-        className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 transition-colors"
-        type="button"
-      >
-        Clear Filters
-      </button>
-    </div>
-  );
-}
-
-/** Error state component */
-function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="text-center py-12" role="alert">
-      <svg className="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-      <p className="text-lg text-red-300 mt-4">Failed to load data</p>
-      <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">{message}</p>
-      <button
-        onClick={onRetry}
-        className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 transition-colors"
-        type="button"
-      >
-        Retry
-      </button>
-    </div>
-  );
-}
-
 export function TokenCostCharts({
   password,
   appName,
@@ -248,7 +141,6 @@ export function TokenCostCharts({
 }: TokenCostChartsProps) {
   const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
   const [selectedBucket, setSelectedBucket] = useState<Bucket>(bucket);
-  const [error, setError] = useState<string | null>(null);
 
   const aggregates: AggregatesData | undefined = useQuery(api.usage.getTokenCostAggregates, {
     dashboardPassword: password,
@@ -265,43 +157,13 @@ export function TokenCostCharts({
   const maxTokens = useMemo(() => Math.max(...(series ?? []).map((p) => p.totalTokens), 1), [series]);
   const maxCost = useMemo(() => Math.max(...(series ?? []).map((p) => p.cost), 0.001), [series]);
 
-  // Loading state - show skeletons
   if (aggregates === undefined) {
     return (
-      <div className="space-y-8" role="status" aria-live="polite" aria-label="Loading token cost charts">
-        <div className="flex items-center gap-4 animate-pulse" role="group" aria-label="View mode">
-          <div className="h-5 w-12 bg-white/5 rounded" />
-          <div className="h-10 w-40 bg-white/5 rounded" />
-          <div className="h-5 w-12 bg-white/5 rounded ml-4" />
-          <div className="h-10 w-32 bg-white/5 rounded" />
-        </div>
-        <div className="h-4 w-80 animate-pulse bg-white/5 rounded" />
-        <div className="h-8 w-60 animate-pulse bg-white/5 rounded" />
-        {viewMode === "chart" ? (
-          <>
-            <ChartSkeleton />
-            <ChartSkeleton />
-            <BreakdownSkeleton />
-            <BreakdownSkeleton />
-          </>
-        ) : (
-          <>
-            <TableSkeleton />
-            <TableSkeleton />
-            <TableSkeleton />
-          </>
-        )}
+      <div className="space-y-4" role="status" aria-live="polite">
+        <div className="h-64 w-full animate-pulse bg-white/5 rounded-lg" />
+        <div className="h-64 w-full animate-pulse bg-white/5 rounded-lg" />
+        <div className="h-64 w-full animate-pulse bg-white/5 rounded-lg" />
       </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <ErrorState
-        message={error}
-        onRetry={() => setError(null)}
-      />
     );
   }
 
@@ -309,23 +171,28 @@ export function TokenCostCharts({
 
   const hasData = timeSeries.length > 0 || appBreakdown.length > 0 || modelBreakdown.length > 0;
 
-  const handleClearFilters = () => {
-    if (onClearFilters) {
-      onClearFilters();
-    } else {
-      // Fallback: navigate to base path without query params (legacy behavior)
-      window.location.href = window.location.pathname;
-    }
-  };
-
   if (!hasData) {
-    return <EmptyState onClearFilters={handleClearFilters} />;
+    return (
+      <div className="text-center py-12 text-gray-500">
+        <p className="text-lg">No usage data for the selected filters.</p>
+        <p className="text-sm mt-1">Adjust the date range, app, or model filters to see data.</p>
+        {onClearFilters && (
+          <button
+            onClick={onClearFilters}
+            className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Clear Filters
+          </button>
+        )}
+      </div>
+    );
   }
 
   const bucketName = BUCKET_NAMES[selectedBucket];
 
   const formatCost = (cost: number) => `$${cost.toFixed(cost < 0.01 ? 4 : 2)}`;
   const formatTokens = (tokens: number) => tokens.toLocaleString();
+
 
   return (
     <div className="space-y-8">
