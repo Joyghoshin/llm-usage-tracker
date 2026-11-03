@@ -46,8 +46,8 @@ interface TokenCostChartsProps {
   bucket?: Bucket;
   startTime?: number;
   endTime?: number;
+  onClearFilters?: () => void;
 }
-
 
 const COMPACT = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 const TOKEN_COLORS = { input: "#3b82f6", output: "#60a5fa", cost: "#22c55e" } as const;
@@ -137,6 +137,7 @@ export function TokenCostCharts({
   bucket = "day",
   startTime,
   endTime,
+  onClearFilters,
 }: TokenCostChartsProps) {
   const [viewMode, setViewMode] = useState<"chart" | "table">("chart");
   const [selectedBucket, setSelectedBucket] = useState<Bucket>(bucket);
@@ -175,6 +176,14 @@ export function TokenCostCharts({
       <div className="text-center py-12 text-gray-500">
         <p className="text-lg">No usage data for the selected filters.</p>
         <p className="text-sm mt-1">Adjust the date range, app, or model filters to see data.</p>
+        {onClearFilters && (
+          <button
+            onClick={onClearFilters}
+            className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Clear Filters
+          </button>
+        )}
       </div>
     );
   }
